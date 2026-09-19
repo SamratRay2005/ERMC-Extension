@@ -59,6 +59,16 @@ def project_l1(delta, epsilon):
     return torch.stack(projected).view(original_shape)
 
 
+def l1_steepest_step(delta, grad, alpha):
+    """Take a sparse steepest-descent step for the L1 constraint."""
+    batch_size = grad.size(0)
+    flat_grad = grad.view(batch_size, -1)
+    _, max_indices = torch.max(torch.abs(flat_grad), dim=1, keepdim=True)
+    sparse_mask = torch.zeros_like(flat_grad).scatter_(1, max_indices, 1.0)
+    sparse_mask = sparse_mask.view_as(grad)
+    return delta + alpha * (sparse_mask * grad.sign())
+
+
 # ────────────────────────────── PGD attacks ──────────────────────────────
 
 def pgd_linf(model, x, y, epsilon=8/255, alpha=2/255, steps=20, random_start=True):
@@ -130,7 +140,7 @@ def pgd_l1(model, x, y, epsilon=12.0, alpha=1.0, steps=20, random_start=True):
         grad = torch.autograd.grad(loss, delta)[0]
         with torch.no_grad():
             # L1 steepest-descent: step in sign(grad) only at the max-abs coordinate
-            delta = delta + alpha * grad.sign()
+            delta = l1_steepest_step(delta, grad, alpha)
             delta = project_l1(delta, epsilon)
             delta = torch.clamp(x + delta, 0, 1) - x
         delta = delta.detach()
@@ -164,7 +174,7 @@ def msd_train_attack(model, x, y,
             d_inf = torch.clamp(x + d_inf, 0, 1) - x
 
             # ── L1 candidate ──
-            d_l1 = delta + alpha_1 * grad.sign()
+            d_l1 = l1_steepest_step(delta, grad, alpha_1)
             d_l1 = project_l1(d_l1, epsilon_1)
             d_l1 = torch.clamp(x + d_l1, 0, 1) - x
 
@@ -209,7 +219,7 @@ def msd_eval_attack(model, x, y,
             d_l2 = torch.clamp(x + d_l2, 0, 1) - x
 
             # ── L1 candidate ──
-            d_l1 = delta + alpha_1 * grad.sign()
+            d_l1 = l1_steepest_step(delta, grad, alpha_1)
             d_l1 = project_l1(d_l1, epsilon_1)
             d_l1 = torch.clamp(x + d_l1, 0, 1) - x
 

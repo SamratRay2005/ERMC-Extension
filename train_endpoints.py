@@ -89,6 +89,7 @@ def main():
             )
             adv_inputs = torch.clamp(inputs + delta, 0, 1)
 
+            model.train()
             optimizer.zero_grad()
             outputs = model(adv_inputs)
             loss = criterion(outputs, targets)
