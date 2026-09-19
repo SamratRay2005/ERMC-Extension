@@ -37,11 +37,12 @@ class BezierPath:
         self.theta = {}
         self._param_keys = []
         self._buffer_keys = []
+        param_names = set(dict(self.base_model.named_parameters()).keys())
 
         for k, v in theta1_state.items():
             v1 = self.theta1[k]
             v2 = self.theta2[k]
-            if v1.is_floating_point() and v1.requires_grad is not False:
+            if k in param_names and v1.is_floating_point():
                 # Trainable parameter
                 self.theta[k] = nn.Parameter(((v1 + v2) / 2).clone())
                 self._param_keys.append(k)
@@ -99,6 +100,11 @@ class BezierWrapper(nn.Module):
         super().__init__()
         self.bp = bezier_path
         self.t = t
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        self.bp.base_model.train(mode)
+        return self
 
     def forward(self, x):
         return self.bp.forward(x, self.t)
