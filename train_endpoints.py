@@ -83,12 +83,12 @@ def main():
     print('\nRaw model robust accuracy before L1 fine-tuning:')
     raw_linf = robust_accuracy(
         model, test_loader, device, pgd_linf,
-        epsilon=8/255, alpha=2/255, steps=args.pgd_steps,
+        epsilon=8/255, alpha=2/255, steps=20,
     )
     raw_l1 = robust_accuracy(
         model, test_loader, device, pgd_l1,
         epsilon=args.epsilon_1, alpha=args.alpha_1,
-        steps=args.pgd_steps, random_start=True,
+        steps=20, random_start=True,
     )
     print(f'  PGD-Linf: {raw_linf:.2f}%')
     print(f'  PGD-L1  : {raw_l1:.2f}%')
