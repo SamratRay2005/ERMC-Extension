@@ -36,6 +36,8 @@ def parse_args():
     p.add_argument('--alpha-inf', type=float, default=2/255)
     p.add_argument('--alpha-1', type=float, default=1.0)
     p.add_argument('--msd-steps', type=int, default=10)
+    p.add_argument('--resume', type=str, default=None,
+                   help='Resume ERMC training from an epoch checkpoint')
     return p.parse_args()
 
 
@@ -79,10 +81,23 @@ def main():
     )
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     criterion = nn.CrossEntropyLoss()
+    start_epoch = 0
+
+    if args.resume:
+        print(f'\nResuming ERMC training from {args.resume}')
+        checkpoint = torch.load(args.resume, map_location=device, weights_only=True)
+        with torch.no_grad():
+            for key, value in checkpoint['control_state'].items():
+                bezier.theta[key].copy_(value.to(device))
+        optimizer.load_state_dict(checkpoint['optimizer_state'])
+        scheduler.load_state_dict(checkpoint['scheduler_state'])
+        start_epoch = checkpoint['epoch']
+        print(f'Resuming at epoch {start_epoch + 1}/{args.epochs}')
 
     # ── Training loop (Algorithm 1) ─────────────────────────────────────
     print(f'\nStarting ERMC optimisation ({args.epochs} epochs)...')
-    for epoch in range(args.epochs):
+    checkpoint_path = os.path.join(args.save_dir, 'ermc_checkpoint.pt')
+    for epoch in range(start_epoch, args.epochs):
         total_loss, correct, total = 0.0, 0, 0
 
         pbar = tqdm(train_loader, desc=f'ERMC Epoch {epoch+1}/{args.epochs}')
@@ -127,6 +142,16 @@ def main():
             )
 
         scheduler.step()
+
+        torch.save({
+            'epoch': epoch + 1,
+            'control_state': {
+                key: value.detach().clone() for key, value in bezier.theta.items()
+            },
+            'optimizer_state': optimizer.state_dict(),
+            'scheduler_state': scheduler.state_dict(),
+        }, checkpoint_path)
+        print(f'  Checkpoint saved -> {checkpoint_path}')
 
     # ── Save the control-point parameters ───────────────────────────────
     ctrl_path = os.path.join(args.save_dir, 'theta_control.pt')
