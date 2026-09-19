@@ -105,6 +105,9 @@ def main():
             )
             adv_inputs = torch.clamp(inputs + delta, 0, 1)
 
+            # Restore training behavior for the control-point update.
+            t_model.train()
+
             # Forward through the path at t and update θ
             optimizer.zero_grad()
             outputs = bezier.forward(adv_inputs, t)
