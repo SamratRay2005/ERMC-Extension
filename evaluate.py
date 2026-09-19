@@ -86,7 +86,7 @@ def union_accuracy(model, loader, device,
 
 
 def msd_accuracy(model, loader, device,
-                 eps_inf=8/255, eps_2=1.0, eps_1=12.0, steps=10):
+                 eps_inf=8/255, eps_2=1.0, eps_1=12.0, steps=20):
     """Robust accuracy under the MSD attack."""
     model.eval()
     correct, total = 0, 0
@@ -146,7 +146,7 @@ def evaluate_model(model, loader, device, run_aa=False, label='Model'):
                            epsilon=12.0, alpha=1.0, steps=20)
     print(f'  PGD-L₁       : {r_l1:.2f}%')
 
-    r_msd = msd_accuracy(model, loader, device)
+    r_msd = msd_accuracy(model, loader, device, steps=20)
     print(f'  MSD          : {r_msd:.2f}%')
 
     r_union = union_accuracy(model, loader, device)
@@ -201,10 +201,10 @@ def evaluate_ensemble(bezier, loader, device, n_models=5,
     """
     ERMC-n ensemble selection (Section 4.2).
 
-    1. Scan the path to find the segment [a,b] where both RA_L∞ > α_∞
-       and RA_L₁ > α₁.
-    2. Select n equally-spaced models from that segment.
-    3. Average their softmax outputs for prediction.
+    1. Scan the path to find points where both RA_L∞ > α_∞ and RA_L₁ > α₁.
+    2. Group valid points into contiguous segments and distribute n models
+       across them in proportion to their lengths.
+    3. Average their logits for prediction.
     """
     print('\n' + '='*60)
     print(f'  ERMC Ensemble Selection (n={n_models})')
@@ -241,16 +241,45 @@ def evaluate_ensemble(bezier, loader, device, n_models=5,
         selected_ts = [best_t]
         print(f'  Using single best t = {best_t:.3f}')
     else:
-        a, b = valid_ts[0], valid_ts[-1]
-        print(f'  Valid segment: [{a:.3f}, {b:.3f}]')
+        step = ts[1] - ts[0] if len(ts) > 1 else 0.0
+        segments = []
+        current_segment = [valid_ts[0]]
+        for t_val in valid_ts[1:]:
+            if np.isclose(t_val - current_segment[-1], step):
+                current_segment.append(t_val)
+            else:
+                segments.append(np.array(current_segment))
+                current_segment = [t_val]
+        segments.append(np.array(current_segment))
+
+        print(f'  Valid segments: {[(segment[0], segment[-1]) for segment in segments]}')
         if n_models == 1:
-            # ERMC-1: pick the t that maximises min(RA_L∞, RA_L₁) in [a,b]
-            mask = (ts >= a) & (ts <= b)
-            worst_case = np.minimum(ra_inf_vals[mask], ra_l1_vals[mask])
-            best_idx = np.argmax(worst_case)
-            selected_ts = [ts[mask][best_idx]]
+            # ERMC-1: pick the valid t that maximises min(RA_L∞, RA_L₁).
+            worst_case = np.minimum(ra_inf_vals[valid], ra_l1_vals[valid])
+            selected_ts = [valid_ts[np.argmax(worst_case)]]
         else:
-            selected_ts = np.linspace(a, b, n_models).tolist()
+            segment_lengths = np.array([
+                max(segment[-1] - segment[0], step) for segment in segments
+            ])
+            raw_counts = n_models * segment_lengths / segment_lengths.sum()
+            counts = np.floor(raw_counts).astype(int)
+            if n_models >= len(segments):
+                counts = np.maximum(counts, 1)
+
+            while counts.sum() < n_models:
+                remainders = raw_counts - counts
+                counts[np.argmax(remainders)] += 1
+            while counts.sum() > n_models:
+                removable = np.where(counts > (1 if n_models >= len(segments) else 0))[0]
+                counts[removable[np.argmin(raw_counts[removable] - counts[removable])]] -= 1
+
+            selected_ts = []
+            for segment, count in zip(segments, counts):
+                if count == 1:
+                    selected_ts.append(segment[len(segment) // 2])
+                else:
+                    selected_ts.extend(np.linspace(segment[0], segment[-1], count))
+            selected_ts = np.asarray(selected_ts).tolist()
 
     print(f'  Selected t values: {[f"{t:.3f}" for t in selected_ts]}')
 
