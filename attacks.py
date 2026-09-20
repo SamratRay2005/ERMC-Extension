@@ -59,21 +59,25 @@ def project_l1(delta, epsilon):
     return torch.stack(projected).view(original_shape)
 
 
-def l1_steepest_step(delta, grad, alpha, sparsity=0.05):
+def l1_steepest_step(delta, grad, alpha, k=50):
     """
     Take a sparse steepest-descent step for the L1 constraint.
-    Updates the top-k coordinates instead of just a single pixel.
+    Upgraded to Top-k coordinates to prevent gradient masking.
     """
     batch_size = grad.size(0)
     flat_grad = grad.view(batch_size, -1)
-    num_features = flat_grad.size(1)
-    k = max(1, int(sparsity * num_features))
 
+    # Find the top-k absolute gradient values instead of just the single max.
     _, topk_indices = torch.topk(torch.abs(flat_grad), k, dim=1)
+
+    # Create a sparse mask for all k coordinates.
     sparse_mask = torch.zeros_like(flat_grad).scatter_(1, topk_indices, 1.0)
     sparse_mask = sparse_mask.view_as(grad)
 
-    return delta + alpha * (sparse_mask * grad.sign())
+    # Distribute the L1 step size evenly across the k coordinates.
+    distributed_alpha = alpha / k
+
+    return delta + distributed_alpha * (sparse_mask * grad.sign())
 
 
 # ────────────────────────────── PGD attacks ──────────────────────────────
