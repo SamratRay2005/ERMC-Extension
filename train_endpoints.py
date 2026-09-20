@@ -1,7 +1,7 @@
 """
 train_endpoints.py — Generate the two endpoint models for ERMC.
 
-Step 1:  θ₁ = AT-L∞  → downloaded from RobustBench (Carmon2019_unlabeled,
+Step 1:  θ₁ = AT-L∞  → downloaded from RobustBench (Madry2018,
          WideResNet-28-10, CIFAR-10, ε_∞ = 8/255).
 
 Step 2:  θ₂ = fine-tune θ₁ with AT-L₁ for 10 epochs (Section 4.1).
@@ -62,9 +62,9 @@ def main():
     os.makedirs(args.save_dir, exist_ok=True)
 
     # ── Step 1: Load pretrained AT-L∞ model (θ₁) ────────────────────────
-    print('Downloading AT-L∞ model from RobustBench (Carmon2019_unlabeled)...')
+    print('Downloading AT-L∞ model from RobustBench (Madry2018)...')
     model = load_model(
-        model_name='Carmon2019Unlabeled',
+        model_name='Madry2018',
         dataset='cifar10',
         threat_model='Linf',
     )

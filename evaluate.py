@@ -356,7 +356,7 @@ def main():
     # ── Reconstruct the Bézier path ─────────────────────────────────────
     print('Loading base model and endpoints...')
     base_model = load_model(
-        model_name='Carmon2019Unlabeled',
+        model_name='Madry2018',
         dataset='cifar10',
         threat_model='Linf',
     )

@@ -57,7 +57,7 @@ def main():
     # ── Load base model architecture + endpoint state dicts ─────────────
     print('Loading base model architecture from RobustBench...')
     base_model = load_model(
-        model_name='Carmon2019Unlabeled',
+        model_name='Madry2018',
         dataset='cifar10',
         threat_model='Linf',
     )
