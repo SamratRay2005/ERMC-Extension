@@ -59,13 +59,20 @@ def project_l1(delta, epsilon):
     return torch.stack(projected).view(original_shape)
 
 
-def l1_steepest_step(delta, grad, alpha):
-    """Take a sparse steepest-descent step for the L1 constraint."""
+def l1_steepest_step(delta, grad, alpha, sparsity=0.05):
+    """
+    Take a sparse steepest-descent step for the L1 constraint.
+    Updates the top-k coordinates instead of just a single pixel.
+    """
     batch_size = grad.size(0)
     flat_grad = grad.view(batch_size, -1)
-    _, max_indices = torch.max(torch.abs(flat_grad), dim=1, keepdim=True)
-    sparse_mask = torch.zeros_like(flat_grad).scatter_(1, max_indices, 1.0)
+    num_features = flat_grad.size(1)
+    k = max(1, int(sparsity * num_features))
+
+    _, topk_indices = torch.topk(torch.abs(flat_grad), k, dim=1)
+    sparse_mask = torch.zeros_like(flat_grad).scatter_(1, topk_indices, 1.0)
     sparse_mask = sparse_mask.view_as(grad)
+
     return delta + alpha * (sparse_mask * grad.sign())
 
 
