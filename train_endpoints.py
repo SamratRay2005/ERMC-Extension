@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
+from autoattack import AutoAttack
 
 from robustbench.utils import load_model
 from dataset import get_cifar10_dataloaders
@@ -101,6 +102,11 @@ def main():
     criterion = nn.CrossEntropyLoss()
     start_epoch = 0
 
+    adversary_l1 = AutoAttack(
+        model, norm='L1', eps=args.epsilon_1, version='custom',
+        attacks_to_run=['apgd-ce'],
+    )
+
     if args.resume:
         print(f'\nResuming endpoint fine-tuning from {args.resume}')
         checkpoint = torch.load(args.resume, map_location=device, weights_only=True)
@@ -120,15 +126,12 @@ def main():
         for inputs, targets in pbar:
             inputs, targets = inputs.to(device), targets.to(device)
 
-            # generate L₁ adversarial examples
-            delta = pgd_l1(
-                model, inputs, targets,
-                epsilon=args.epsilon_1, alpha=args.alpha_1,
-                steps=args.pgd_steps, random_start=True,
+            model.eval()
+            adv_inputs = adversary_l1.run_standard_evaluation(
+                inputs, targets, bs=inputs.size(0)
             )
-            adv_inputs = torch.clamp(inputs + delta, 0, 1)
-
             model.train()
+
             optimizer.zero_grad()
             outputs = model(adv_inputs)
             loss = criterion(outputs, targets)
